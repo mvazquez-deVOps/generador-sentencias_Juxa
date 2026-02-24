@@ -77,7 +77,7 @@ function App() {
       
       {/* Footer / Branding */}
       <div className="bg-[#050505] text-slate-600 text-[10px] p-2 text-center border-t border-white/5 uppercase tracking-widest font-bold">
-        JUXA INTELLIGENCE • 2026
+        JX LABS | Todos los derechos reservados &copy; 2026
       </div>
     </div>
   );

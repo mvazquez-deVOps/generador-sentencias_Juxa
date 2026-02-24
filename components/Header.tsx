@@ -15,9 +15,6 @@ export const Header: React.FC = () => {
         </div>
       </div>
       <div className="flex items-center space-x-4">
-          <span className="text-[10px] font-bold tracking-widest uppercase text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
-            Modo: Postulante
-          </span>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center text-xs font-bold shadow-lg shadow-blue-900/20">
             AD
           </div>

@@ -2,29 +2,16 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MAGISTRADO_SYSTEM_INSTRUCTION } from "../constants";
 import { SentenceRequest, SentenceResponse, LegalMatter, ChatMessage, SemanticAnalysisResult } from "../types";
 
-// Helper to convert File to Base64
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove the data URL prefix (e.g., "data:application/pdf;base64,")
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-};
-
 export const generateSentence = async (request: SentenceRequest): Promise<SentenceResponse> => {
   const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("API Key not found");
   }
 
+  // 1. Declarar 'ai' PRIMERO
   const ai = new GoogleGenAI({ apiKey });
   
+  // 2. Declarar 'parts' PRIMERO con el prompt original
   const parts: any[] = [
       { text: `
     INSTRUCCIÓN DE PRIORIDAD MÁXIMA: 
@@ -63,21 +50,32 @@ export const generateSentence = async (request: SentenceRequest): Promise<Senten
       `}
   ];
 
+  // 3. Procesar el archivo (ÚNICO BLOQUE DE ARCHIVO)
   if (request.caseFile) { 
     try {
-      const base64 = await fileToBase64(request.caseFile);
+      // Subir el archivo a los servidores de Gemini mediante File API
+      const uploadResult = await ai.files.upload({
+        file: request.caseFile,
+        // En el nuevo SDK, mimeType va dentro de config
+        config: {
+            mimeType: request.caseFile.type,
+        }
+      });
+
+      // Pasar el identificador (URI) al modelo
       parts.push({ 
-        inlineData: { 
-          mimeType: request.caseFile.type, 
-          data: base64 
+        fileData: { 
+          mimeType: uploadResult.mimeType || request.caseFile.type, 
+          fileUri: uploadResult.uri 
         } 
       });
     } catch (e) {
-      console.error("Error reading file:", e);
-      throw new Error("Error al leer el archivo PDF. Intente nuevamente.");
+      console.error("Error subiendo el archivo a Gemini:", e);
+      throw new Error("Error al procesar el archivo PDF. Intente nuevamente.");
     }
   }
 
+  // 4. Generar el contenido
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview', 
@@ -112,7 +110,7 @@ export const generateSentence = async (request: SentenceRequest): Promise<Senten
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     if (error.message?.includes("400")) {
-       throw new Error("Error de solicitud (400). Posiblemente el archivo es demasiado grande o el formato no es válido.");
+      throw new Error("Error de solicitud (400). Posiblemente el archivo es demasiado grande o el formato no es válido.");
     }
     throw new Error(error.message || "Error al generar la sentencia.");
   }
@@ -199,23 +197,23 @@ export const analyzeLegislation = async (fullText: string): Promise<SemanticAnal
 };
 
 export const chatWithSentence = async (currentSentence: string, history: ChatMessage[], newMessage: string, mode: 'chat' | 'analysis'): Promise<string> => {
-   const apiKey = process.env.API_KEY;
-   if (!apiKey) throw new Error("API Key missing");
-   
-   const ai = new GoogleGenAI({ apiKey });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API Key missing");
+  
+  const ai = new GoogleGenAI({ apiKey });
 
-   let systemInstruction = "";
-   let userPrompt = "";
+  let systemInstruction = "";
+  let userPrompt = "";
 
-   if (mode === 'analysis') {
+  if (mode === 'analysis') {
       systemInstruction = "Eres un auditor jurídico experto (JUXA Analytics). Tu trabajo es encontrar contradicciones lógicas, falta de fundamentación, errores en fechas o puntos débiles apelables en el texto de la sentencia proporcionada.";
       userPrompt = `Analiza el siguiente texto de sentencia y busca: 1. Contradicciones internas. 2. Puntos débiles en la argumentación. 3. Errores posibles. TEXTO: ${currentSentence}`;
-   } else {
+  } else {
       systemInstruction = "Eres un asistente legal experto ayudando a un juez a pulir una sentencia. Eres breve, directo y técnico.";
       userPrompt = `Basado en este texto de sentencia: "${currentSentence.substring(0, 10000)}..." \n\n El usuario pregunta: ${newMessage}`;
-   }
-   
-   const response = await ai.models.generateContent({
+  }
+  
+  const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [
         { role: 'user', parts: [{ text: userPrompt }] }
@@ -223,7 +221,7 @@ export const chatWithSentence = async (currentSentence: string, history: ChatMes
       config: {
         systemInstruction: systemInstruction
       }
-   });
+  });
 
-   return response.text || "No se pudo generar respuesta.";
+  return response.text || "No se pudo generar respuesta.";
 };
