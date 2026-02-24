@@ -3,50 +3,50 @@ import ReactMarkdown from 'react-markdown';
 import { Copy, Check, ChevronLeft, ChevronRight, FileDown, Edit3, Eye, SplitSquareHorizontal, MessageSquare, AlertTriangle, Send, X, Maximize2, Minimize2, RefreshCw, Sparkles, Scale, BookOpen, Quote, ArrowRight, Wand2, Save, Type, Lightbulb, Info, FileText } from 'lucide-react';
 import { SentenceResponse, LegalMatter, ChatMessage, SemanticAnalysisResult } from '../types';
 import { chatWithSentence, editSentenceFragment, analyzeLegislation } from '../services/geminiService';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb , PageSizes } from 'pdf-lib';
 
 interface DocumentPreviewProps {
-  data: SentenceResponse | null;
-  isLoading: boolean;
-  uploadedFile: File | null;
+    data: SentenceResponse | null;
+    isLoading: boolean;
+    uploadedFile: File | null;
 }
 
 const CHARS_PER_PAGE = 3000;
 const STORAGE_KEY = 'juxa_current_draft';
 
 export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoading, uploadedFile }) => {
-  const [copied, setCopied] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [pages, setPages] = useState<string[]>([]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editableText, setEditableText] = useState('');
-  const [showPdfSplit, setShowPdfSplit] = useState(false);
-  const [activeTab, setActiveTab] = useState<'project' | 'analytics' | 'semantic' | 'ratio'>('project');
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
-  
-  // Smart Edit State
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [selectionRange, setSelectionRange] = useState<{start: number, end: number} | null>(null);
-  const [isSmartEditLoading, setIsSmartEditLoading] = useState(false);
-  const [selectedText, setSelectedText] = useState('');
-  const [smartEditInput, setSmartEditInput] = useState('');
-  const [showSmartEditDialog, setShowSmartEditDialog] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [currentPage, setCurrentPage] = useState(0);
+    const [pages, setPages] = useState<string[]>([]);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editableText, setEditableText] = useState('');
+    const [showPdfSplit, setShowPdfSplit] = useState(false);
+    const [activeTab, setActiveTab] = useState<'project' | 'analytics' | 'semantic' | 'ratio'>('project');
+    const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+    
+    // Smart Edit State
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [selectionRange, setSelectionRange] = useState<{start: number, end: number} | null>(null);
+    const [isSmartEditLoading, setIsSmartEditLoading] = useState(false);
+    const [selectedText, setSelectedText] = useState('');
+    const [smartEditInput, setSmartEditInput] = useState('');
+    const [showSmartEditDialog, setShowSmartEditDialog] = useState(false);
 
-  // Semantic Analysis State
-  const [semanticData, setSemanticData] = useState<SemanticAnalysisResult | null>(null);
-  const [isSemanticLoading, setIsSemanticLoading] = useState(false);
+    // Semantic Analysis State
+    const [semanticData, setSemanticData] = useState<SemanticAnalysisResult | null>(null);
+    const [isSemanticLoading, setIsSemanticLoading] = useState(false);
 
-  // Chat / Analytics State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
+    // Chat / Analytics State
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [chatInput, setChatInput] = useState('');
+    const [isChatLoading, setIsChatLoading] = useState(false);
 
   // Initialize editable text when data arrives
-  useEffect(() => {
+useEffect(() => {
     if (data?.text) {
-      setEditableText(data.text);
-      setSemanticData(null);
-      setSaveStatus('unsaved');
+        setEditableText(data.text);
+        setSemanticData(null);
+        setSaveStatus('unsaved');
     } else {
         // Try to load from local storage if no new data
         const savedDraft = localStorage.getItem(STORAGE_KEY);
@@ -54,83 +54,83 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
             setEditableText(savedDraft);
         }
     }
-  }, [data]);
+}, [data]);
 
   // Auto-save logic
-  useEffect(() => {
-      if (!editableText) return;
-      
-      const timeoutId = setTimeout(() => {
-          setSaveStatus('saving');
-          localStorage.setItem(STORAGE_KEY, editableText);
-          setTimeout(() => setSaveStatus('saved'), 800);
+useEffect(() => {
+    if (!editableText) return;
+    
+    const timeoutId = setTimeout(() => {
+        setSaveStatus('saving');
+        localStorage.setItem(STORAGE_KEY, editableText);
+        setTimeout(() => setSaveStatus('saved'), 800);
       }, 2000); // Auto-save after 2 seconds of inactivity
 
-      return () => clearTimeout(timeoutId);
-  }, [editableText]);
+    return () => clearTimeout(timeoutId);
+}, [editableText]);
 
   // Handle Pagination (Reactive to edits)
-  useEffect(() => {
+useEffect(() => {
     if (editableText) {
-      const splitTextIntoPages = (text: string) => {
+    const splitTextIntoPages = (text: string) => {
         const paragraphs = text.split('\n');
         const newPages: string[] = [];
         let currentAccumulator = '';
 
         paragraphs.forEach((para) => {
-          if ((currentAccumulator.length + para.length > CHARS_PER_PAGE) && currentAccumulator.length > 0) {
-            newPages.push(currentAccumulator);
-            currentAccumulator = para + '\n';
-          } else {
-            currentAccumulator += para + '\n';
-          }
+            if ((currentAccumulator.length + para.length > CHARS_PER_PAGE) && currentAccumulator.length > 0) {
+                newPages.push(currentAccumulator);
+                currentAccumulator = para + '\n';
+            } else {
+                currentAccumulator += para + '\n';
+            }
         });
         
         if (currentAccumulator.length > 0) {
-          newPages.push(currentAccumulator);
+            newPages.push(currentAccumulator);
         }
         return newPages;
-      };
+    };
 
-      setPages(splitTextIntoPages(editableText));
-      setCurrentPage(prev => Math.min(prev, Math.max(0, splitTextIntoPages(editableText).length - 1)));
+        setPages(splitTextIntoPages(editableText));
+        setCurrentPage(prev => Math.min(prev, Math.max(0, splitTextIntoPages(editableText).length - 1)));
     } else {
-      setPages([]);
+        setPages([]);
     }
-  }, [editableText]);
+}, [editableText]);
 
-  const handleManualSave = () => {
-      setSaveStatus('saving');
-      localStorage.setItem(STORAGE_KEY, editableText);
-      setTimeout(() => setSaveStatus('saved'), 500);
-  };
+const handleManualSave = () => {
+    setSaveStatus('saving');
+    localStorage.setItem(STORAGE_KEY, editableText);
+    setTimeout(() => setSaveStatus('saved'), 500);
+};
 
-  const handleCopy = () => {
+const handleCopy = () => {
     if (editableText) {
-      navigator.clipboard.writeText(editableText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+        navigator.clipboard.writeText(editableText);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     }
-  };
+};
 
   // --- SEMANTIC ANALYSIS LOGIC ---
-  const handleTabChange = async (tab: 'project' | 'analytics' | 'semantic' | 'ratio') => {
-      setActiveTab(tab);
-      if (tab === 'semantic' && !semanticData && !isSemanticLoading && editableText) {
-          setIsSemanticLoading(true);
-          try {
-              const result = await analyzeLegislation(editableText);
-              setSemanticData(result);
-          } catch (e) {
-              console.error("Failed to analyze legislation", e);
-          } finally {
-              setIsSemanticLoading(false);
-          }
-      }
-  };
+const handleTabChange = async (tab: 'project' | 'analytics' | 'semantic' | 'ratio') => {
+    setActiveTab(tab);
+    if (tab === 'semantic' && !semanticData && !isSemanticLoading && editableText) {
+        setIsSemanticLoading(true);
+        try {
+            const result = await analyzeLegislation(editableText);
+            setSemanticData(result);
+        } catch (e) {
+            console.error("Failed to analyze legislation", e);
+        } finally {
+            setIsSemanticLoading(false);
+        }
+    }
+};
 
   // --- SMART EDIT LOGIC ---
-  const handleTextSelect = () => {
+const handleTextSelect = () => {
     if (textareaRef.current) {
         const start = textareaRef.current.selectionStart;
         const end = textareaRef.current.selectionEnd;
@@ -141,37 +141,37 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
             setSmartEditInput(''); // Clear previous input
         }
     }
-  };
+};
 
-  const executeSmartEdit = async (instruction: string) => {
-      if (!selectionRange || !textareaRef.current) return;
-      
-      setIsSmartEditLoading(true);
-      try {
-          const originalFragment = textareaRef.current.value.substring(selectionRange.start, selectionRange.end);
-          const newFragment = await editSentenceFragment(originalFragment, instruction);
-          
+const executeSmartEdit = async (instruction: string) => {
+    if (!selectionRange || !textareaRef.current) return;
+    
+    setIsSmartEditLoading(true);
+    try {
+        const originalFragment = textareaRef.current.value.substring(selectionRange.start, selectionRange.end);
+        const newFragment = await editSentenceFragment(originalFragment, instruction);
+        
           // Replace text
-          const pre = textareaRef.current.value.substring(0, selectionRange.start);
-          const post = textareaRef.current.value.substring(selectionRange.end);
-          const newFullText = pre + newFragment + post;
-          
-          setEditableText(newFullText);
-          setSelectionRange(null); 
-          setSelectedText('');
-          setShowSmartEditDialog(false);
-          setSmartEditInput('');
+        const pre = textareaRef.current.value.substring(0, selectionRange.start);
+        const post = textareaRef.current.value.substring(selectionRange.end);
+        const newFullText = pre + newFragment + post;
+        
+        setEditableText(newFullText);
+        setSelectionRange(null); 
+        setSelectedText('');
+        setShowSmartEditDialog(false);
+        setSmartEditInput('');
           setSaveStatus('unsaved'); // Trigger save needed
-      } catch (e) {
-          console.error("Smart edit failed", e);
-      } finally {
-          setIsSmartEditLoading(false);
-      }
-  };
+    } catch (e) {
+        console.error("Smart edit failed", e);
+    } finally {
+        setIsSmartEditLoading(false);
+    }
+};
 
   // --- END SMART EDIT LOGIC ---
 
-  const handleSendMessage = async (mode: 'chat' | 'analysis') => {
+const handleSendMessage = async (mode: 'chat' | 'analysis') => {
     if ((mode === 'chat' && !chatInput.trim()) || !editableText) return;
     
     setIsChatLoading(true);
@@ -192,28 +192,28 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
     } finally {
         setIsChatLoading(false);
     }
-  };
+};
 
-  const textToHtml = (text: string) => {
+const textToHtml = (text: string) => {
     // Basic Markdown to HTML conversion for Word
     let html = text
-      .replace(/^# (.*$)/gim, '<h1 style="font-size: 16pt; text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 12pt;">$1</h1>')
-      .replace(/^## (.*$)/gim, '<h2 style="font-size: 14pt; text-align: center; font-weight: bold; margin-top: 12pt; margin-bottom: 12pt;">$1</h2>')
-      .replace(/^### (.*$)/gim, '<h3 style="font-size: 12pt; font-weight: bold; text-align: left; margin-top: 12pt;">$1</h3>')
-      .replace(/\*\*(.*)\*\*/gim, '<b>$1</b>')
-      .replace(/\*(.*)\*/gim, '<i>$1</i>')
-      .replace(/^\s*-\s+(.*)/gim, '<li>$1</li>')
-      .replace(/\n\n/gim, '</p><p class="MsoNormal" style="margin-bottom: 0pt; text-align: justify; font-family: \'Times New Roman\', serif; font-size: 12pt; line-height: 1.5;">')
-      .replace(/\n/gim, '<br />');
+        .replace(/^# (.*$)/gim, '<h1 style="font-size: 16pt; text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 12pt;">$1</h1>')
+        .replace(/^## (.*$)/gim, '<h2 style="font-size: 14pt; text-align: center; font-weight: bold; margin-top: 12pt; margin-bottom: 12pt;">$1</h2>')
+        .replace(/^### (.*$)/gim, '<h3 style="font-size: 12pt; font-weight: bold; text-align: left; margin-top: 12pt;">$1</h3>')
+        .replace(/\*\*(.*)\*\*/gim, '<b>$1</b>')
+        .replace(/\*(.*)\*/gim, '<i>$1</i>')
+        .replace(/^\s*-\s+(.*)/gim, '<li>$1</li>')
+        .replace(/\n\n/gim, '</p><p class="MsoNormal" style="margin-bottom: 0pt; text-align: justify; font-family: \'Times New Roman\', serif; font-size: 12pt; line-height: 1.5;">')
+        .replace(/\n/gim, '<br />');
 
     // Wrap first paragraph if not wrapped
     if (!html.startsWith('<h') && !html.startsWith('<p')) {
         html = '<p class="MsoNormal" style="margin-bottom: 0pt; text-align: justify; font-family: \'Times New Roman\', serif; font-size: 12pt; line-height: 1.5;">' + html;
     }
     return html;
-  };
+};
 
-  const handleDownloadWord = () => {
+const handleDownloadWord = () => {
     if (!editableText) return;
 
     // PROJECT SENTENCE
@@ -250,35 +250,35 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
     `;
 
     const fullHtml = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head>
-        <meta charset="utf-8">
-        <title>Sentencia</title>
-        <!-- Microsoft Word compatible styles -->
-        <style>
-            @page {
-                size: 21.59cm 27.94cm;
-                margin: 2.5cm 3cm 2.5cm 3cm;
-                mso-page-orientation: portrait;
-            }
-            body { 
-                font-family: 'Times New Roman', serif; 
-                font-size: 12pt; 
-                text-align: justify;
-                line-height: 1.5;
-            }
-            p.MsoNormal, li.MsoNormal, div.MsoNormal {
-                mso-style-parent: "";
-                margin: 0cm;
-                margin-bottom: .0001pt;
-                mso-pagination: widow-orphan;
-                font-size: 12.0pt;
-                font-family: "Times New Roman";
-                text-align: justify;
-            }
-        </style>
-      </head>
-      <body>${htmlContent}</body></html>
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+            <meta charset="utf-8">
+            <title>Sentencia</title>
+            <!-- Microsoft Word compatible styles -->
+            <style>
+                @page {
+                    size: 21.59cm 27.94cm;
+                    margin: 2.5cm 3cm 2.5cm 3cm;
+                    mso-page-orientation: portrait;
+                }
+                body { 
+                    font-family: 'Times New Roman', serif; 
+                    font-size: 12pt; 
+                    text-align: justify;
+                    line-height: 1.5;
+                }
+                p.MsoNormal, li.MsoNormal, div.MsoNormal {
+                    mso-style-parent: "";
+                    margin: 0cm;
+                    margin-bottom: .0001pt;
+                    mso-pagination: widow-orphan;
+                    font-size: 12.0pt;
+                    font-family: "Times New Roman";
+                    text-align: justify;
+                }
+            </style>
+        </head>
+        <body>${htmlContent}</body></html>
     `;
 
     const blob = new Blob(['\ufeff', fullHtml], { type: 'application/msword' });
@@ -289,12 +289,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+};
 
-  const handleDownloadPdf = async () => {
-      if (!editableText) return;
+const handleDownloadPdf = async () => {
+    if (!editableText) return;
 
-      try {
+    try {
         const pdfDoc = await PDFDocument.create();
         const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
         const timesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
@@ -302,7 +302,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
         const fontSize = 11;
         const lineHeight = 14;
         const margin = 50;
-        const { width, height } = pdfDoc.getPageSizes().LETTER;
+        const [width, height] = PageSizes.Letter;
         const textWidth = width - (margin * 2);
 
         let page = pdfDoc.addPage([width, height]);
@@ -398,7 +398,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
         drawTextLine("Debe ser validado por un experto.", timesRoman, 'center');
 
         const pdfBytes = await pdfDoc.save();
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -407,109 +407,108 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
         link.click();
         document.body.removeChild(link);
 
-      } catch (e) {
-          console.error("PDF Gen Error", e);
-          alert("Error al generar PDF. Intente descargar en Word.");
-      }
-  };
+        } catch (e) {
+            console.error("PDF Gen Error", e);
+            alert("Error al generar PDF. Intente descargar en Word.");
+        }
+    };
 
-  const getMatterColor = (matter: string) => {
+const getMatterColor = (matter: string) => {
     switch (matter) {
-      case LegalMatter.PENAL: return 'bg-red-900/30 text-red-400 border-red-500/30';
-      case LegalMatter.MERCANTIL: return 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30';
-      case LegalMatter.CIVIL: return 'bg-blue-900/30 text-blue-400 border-blue-500/30';
-      default: return 'bg-slate-800 text-slate-400 border-slate-700';
+        case LegalMatter.PENAL: return 'bg-red-900/30 text-red-400 border-red-500/30';
+        case LegalMatter.MERCANTIL: return 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30';
+        case LegalMatter.CIVIL: return 'bg-blue-900/30 text-blue-400 border-blue-500/30';
+        default: return 'bg-slate-800 text-slate-400 border-slate-700';
     }
-  };
+};
 
-  const DisclaimerFooter = () => (
-      <div className="mt-16 pt-8 border-t-2 border-dashed border-slate-200 dark:border-slate-800">
-          <div className="flex items-start gap-3 text-slate-500 max-w-2xl mx-auto bg-slate-50/5 p-6 rounded-lg border border-slate-200/20 shadow-inner">
-              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <div className="text-[10px] leading-relaxed text-justify w-full">
-                  <p className="font-bold mb-2 uppercase tracking-wide text-slate-400">Hoja de Aviso de Inteligencia Artificial (AI Act Compliance)</p>
-                  <p className="mb-2">
-                      Este documento ha sido generado mediante sistemas de Inteligencia Artificial Generativa (JUXA Core v2.4). 
-                      Conforme a las mejores prácticas regulatorias de la Unión Europea (EU AI Act) y estándares éticos internacionales:
-                  </p>
-                  <ul className="list-disc pl-4 mt-1 space-y-1">
-                      <li>El contenido constituye un <strong>borrador auxiliar</strong> y no sustituye el criterio jurídico humano.</li>
-                      <li>La <strong>Ratio Decidendi</strong> y fundamentación deben ser validadas por un profesional del derecho cualificado.</li>
-                      <li>El sistema puede presentar alucinaciones en citas jurisprudenciales o hechos no contenidos en el expediente fuente.</li>
-                  </ul>
-              </div>
-          </div>
-      </div>
-  );
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full bg-[#050505] text-slate-400 space-y-4">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-800 border-t-emerald-500 rounded-full animate-spin"></div>
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"><span className="text-xl">⚖️</span></div>
+const DisclaimerFooter = () => (
+    <div className="mt-16 pt-8 border-t-2 border-dashed border-slate-200 dark:border-slate-800">
+        <div className="flex items-start gap-3 text-slate-500 max-w-2xl mx-auto bg-slate-50/5 p-6 rounded-lg border border-slate-200/20 shadow-inner">
+            <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="text-[10px] leading-relaxed text-justify w-full">
+                <p className="font-bold mb-2 uppercase tracking-wide text-slate-400">Hoja de Aviso de Inteligencia Artificial (AI Act Compliance)</p>
+                <p className="mb-2">
+                    Este documento ha sido generado mediante sistemas de Inteligencia Artificial Generativa (JUXA Core v2.4). 
+                    Conforme a las mejores prácticas regulatorias de la Unión Europea (EU AI Act) y estándares éticos internacionales:
+                </p>
+                <ul className="list-disc pl-4 mt-1 space-y-1">
+                    <li>El contenido constituye un <strong>borrador auxiliar</strong> y no sustituye el criterio jurídico humano.</li>
+                    <li>La <strong>Ratio Decidendi</strong> y fundamentación deben ser validadas por un profesional del derecho cualificado.</li>
+                    <li>El sistema puede presentar alucinaciones en citas jurisprudenciales o hechos no contenidos en el expediente fuente.</li>
+                </ul>
+            </div>
         </div>
-        <p className="animate-pulse font-medium text-emerald-500">Redactando sentencia de alta precisión...</p>
-      </div>
-    );
-  }
+    </div>
+);
+
+if (isLoading) {
+    return (
+        <div className="flex flex-col items-center justify-center h-full bg-[#050505] text-slate-400 space-y-4">
+            <div className="relative">
+            <div className="w-16 h-16 border-4 border-slate-800 border-t-emerald-500 rounded-full animate-spin"></div>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"><span className="text-xl">⚖️</span></div>
+            </div>
+            <p className="animate-pulse font-medium text-emerald-500">Redactando sentencia de alta precisión...</p>
+        </div>
+        );
+    }
 
   // Show welcome screen if no data AND no saved draft
-  if (!data && !editableText) {
+if (!data && !editableText) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-[#050505] text-slate-500">
-         <div className="mb-6">
-            <h1 className="text-4xl md:text-5xl font-bold text-center mb-2 tracking-tighter text-white">
-              EL FUTURO <br/>
-              <span className="italic text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-blue-600">DEL DERECHO.</span>
-            </h1>
-         </div>
-        <p className="max-w-md text-center text-sm text-slate-400">
-          Análisis jurídico de alta precisión con inteligencia artificial.
-        </p>
-      </div>
-    );
-  }
+        <div className="flex flex-col items-center justify-center h-full bg-[#050505] text-slate-500">
+            <div className="mb-6">
+                <h1 className="text-4xl md:text-5xl font-bold text-center mb-2 tracking-tighter text-white">
+                EL FUTURO <br/>
+                <span className="italic text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-blue-600">DEL DERECHO.</span>
+                </h1>
+            </div>
+            <p className="max-w-md text-center text-sm text-slate-400">
+            Análisis jurídico de alta precisión con inteligencia artificial.
+            </p>
+        </div>
+        );
+    }
 
   // --- RENDER CONTENT ---
-  return (
+return (
     <div className="flex flex-col h-full bg-[#050505] relative">
-      
       {/* TOOLBAR */}
-      <div className="bg-[#0f0f11]/80 backdrop-blur-md border-b border-white/10 px-4 py-3 flex flex-col md:flex-row justify-between items-center z-20 sticky top-0 transition-all">
-        <div className="flex items-center space-x-3">
-            {data?.matterDetected && (
-                <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-wider ${getMatterColor(data.matterDetected)}`}>
-                    {data.matterDetected}
-                </span>
-            )}
+        <div className="bg-[#0f0f11]/80 backdrop-blur-md border-b border-white/10 px-4 py-3 flex flex-col md:flex-row justify-between items-center z-20 sticky top-0 transition-all">
+            <div className="flex items-center space-x-3">
+                {data?.matterDetected && (
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-wider ${getMatterColor(data.matterDetected)}`}>
+                        {data.matterDetected}
+                    </span>
+                )}
             
             {/* View Modes */}
             <div className="flex items-center bg-slate-900/50 rounded-lg p-1 border border-white/5 ml-4">
-               <button 
-                 onClick={() => handleTabChange('project')}
-                 className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'project' ? 'bg-slate-700 text-white shadow-lg shadow-black/50' : 'text-slate-400 hover:text-white'}`}
-               >
-                 <FileDown className="w-3 h-3 mr-1.5" /> PROYECTO
-               </button>
-               <button 
-                 onClick={() => handleTabChange('ratio')}
-                 className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'ratio' ? 'bg-amber-900/40 text-amber-300 shadow-lg shadow-amber-900/20' : 'text-slate-400 hover:text-white'}`}
-               >
-                 <Lightbulb className="w-3 h-3 mr-1.5" /> RATIO DECIDENDI
-               </button>
-               <button 
-                 onClick={() => handleTabChange('semantic')}
-                 className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'semantic' ? 'bg-purple-900/40 text-purple-300 shadow-lg shadow-purple-900/20' : 'text-slate-400 hover:text-white'}`}
-               >
-                 <BookOpen className="w-3 h-3 mr-1.5" /> SEMÁNTICA
-               </button>
-               <button 
-                 onClick={() => handleTabChange('analytics')}
-                 className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'analytics' ? 'bg-blue-900/40 text-blue-300 shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:text-white'}`}
-               >
-                 <MessageSquare className="w-3 h-3 mr-1.5" /> ANALYTICS
-               </button>
+                <button 
+                    onClick={() => handleTabChange('project')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'project' ? 'bg-slate-700 text-white shadow-lg shadow-black/50' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <FileDown className="w-3 h-3 mr-1.5" /> PROYECTO
+                </button>
+                <button 
+                    onClick={() => handleTabChange('ratio')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'ratio' ? 'bg-amber-900/40 text-amber-300 shadow-lg shadow-amber-900/20' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <Lightbulb className="w-3 h-3 mr-1.5" /> RATIO DECIDENDI
+                </button>
+                <button 
+                    onClick={() => handleTabChange('semantic')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'semantic' ? 'bg-purple-900/40 text-purple-300 shadow-lg shadow-purple-900/20' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <BookOpen className="w-3 h-3 mr-1.5" /> SEMÁNTICA
+                </button>
+                <button 
+                    onClick={() => handleTabChange('analytics')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md flex items-center transition-all ${activeTab === 'analytics' ? 'bg-blue-900/40 text-blue-300 shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <MessageSquare className="w-3 h-3 mr-1.5" /> ANALYTICS
+                </button>
             </div>
 
             {/* Save Indicator */}
@@ -530,91 +529,90 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
         <div className="flex items-center space-x-3">
             {uploadedFile && (
                 <button 
-                  onClick={() => setShowPdfSplit(!showPdfSplit)}
-                  className={`p-2 rounded-lg transition-all flex items-center text-sm ${showPdfSplit ? 'bg-emerald-900/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:bg-white/5'}`}
-                  title="Cotejar con Expediente (Pantalla Dividida)"
+                    onClick={() => setShowPdfSplit(!showPdfSplit)}
+                    className={`p-2 rounded-lg transition-all flex items-center text-sm ${showPdfSplit ? 'bg-emerald-900/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:bg-white/5'}`}
+                    title="Cotejar con Expediente (Pantalla Dividida)"
                 >
-                  <SplitSquareHorizontal className="w-4 h-4" />
+                    <SplitSquareHorizontal className="w-4 h-4" />
                 </button>
             )}
 
             <div className="h-6 w-px bg-white/10 mx-1"></div>
 
             <button 
-              onClick={handleManualSave}
-              className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-              title="Guardar Manualmente"
+                onClick={handleManualSave}
+                className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                title="Guardar Manualmente"
             >
-              <Save className="w-4 h-4" />
+                <Save className="w-4 h-4" />
             </button>
 
             <button 
-              onClick={() => setIsEditing(!isEditing)}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border ${isEditing ? 'bg-indigo-600 border-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}`}
-              title={isEditing ? "Volver a Vista Paginada" : "Modo Edición"}
+                onClick={() => setIsEditing(!isEditing)}
+                className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border ${isEditing ? 'bg-indigo-600 border-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                title={isEditing ? "Volver a Vista Paginada" : "Modo Edición"}
             >
-              {isEditing ? <Type className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
-              <span>{isEditing ? 'Vista Lectura' : 'Editor'}</span>
+                {isEditing ? <Type className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+                <span>{isEditing ? 'Vista Lectura' : 'Editor'}</span>
             </button>
             
             <button onClick={handleCopy} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Copiar Texto">
-              {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
             </button>
             
             <button onClick={handleDownloadPdf} className="p-2 text-red-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Descargar PDF">
-              <FileText className="w-4 h-4" />
+                <FileText className="w-4 h-4" />
             </button>
             <button onClick={handleDownloadWord} className="p-2 text-blue-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Descargar Word">
-              <FileDown className="w-4 h-4" />
+                <FileDown className="w-4 h-4" />
             </button>
         </div>
-      </div>
+    </div>
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 flex overflow-hidden">
         
         {/* LEFT PANEL: DOCUMENT (Or full width if no split) */}
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 relative ${activeTab === 'project' ? '' : 'hidden'}`}>
-           
            {/* EDIT MODE (TYPEWRITER STYLE) */}
-           {isEditing ? (
-             <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#0a0a0a]">
-                 <div className="max-w-4xl mx-auto bg-white shadow-[0_0_50px_rgba(0,0,0,0.5)] min-h-[1100px] relative">
-                     {/* Decorative Header Bar */}
-                     <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-                     
-                     {/* Paper Texture/Watermark Effect */}
-                     <div className="absolute top-8 right-8 pointer-events-none opacity-[0.03]">
-                         <Scale className="w-32 h-32 text-black" />
-                     </div>
+            {isEditing ? (
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#0a0a0a]">
+                    <div className="max-w-4xl mx-auto bg-white shadow-[0_0_50px_rgba(0,0,0,0.5)] min-h-[1100px] relative">
+                        {/* Decorative Header Bar */}
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+                        
+                        {/* Paper Texture/Watermark Effect */}
+                        <div className="absolute top-8 right-8 pointer-events-none opacity-[0.03]">
+                            <Scale className="w-32 h-32 text-black" />
+                        </div>
 
-                     <textarea 
-                       ref={textareaRef}
-                       value={editableText}
-                       onChange={(e) => setEditableText(e.target.value)}
-                       onSelect={handleTextSelect}
-                       className="w-full h-full min-h-[1100px] p-12 md:p-16 bg-transparent text-slate-900 font-serif text-lg leading-loose outline-none resize-none selection:bg-indigo-100 selection:text-indigo-900 pb-32 text-justify"
-                       spellCheck={false}
-                       placeholder="Comienza a escribir o selecciona texto para usar la IA..."
-                     />
-                     
-                     <div className="px-16 pb-16">
-                        <DisclaimerFooter />
-                     </div>
+                        <textarea 
+                        ref={textareaRef}
+                        value={editableText}
+                        onChange={(e) => setEditableText(e.target.value)}
+                        onSelect={handleTextSelect}
+                        className="w-full h-full min-h-[1100px] p-12 md:p-16 bg-transparent text-slate-900 font-serif text-lg leading-loose outline-none resize-none selection:bg-indigo-100 selection:text-indigo-900 pb-32 text-justify"
+                        spellCheck={false}
+                        placeholder="Comienza a escribir o selecciona texto para usar la IA..."
+                        />
+                        
+                        <div className="px-16 pb-16">
+                            <DisclaimerFooter />
+                        </div>
 
-                     {/* Floating Magic Button Hint */}
-                     {!showSmartEditDialog && selectionRange && (
-                         <div className="absolute bottom-8 right-8 animate-bounce">
-                             <div className="bg-indigo-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center text-xs font-bold cursor-pointer hover:bg-indigo-500 transition-colors" onClick={() => setShowSmartEditDialog(true)}>
-                                 <Sparkles className="w-4 h-4 mr-2" />
-                                 IA Mágica Disponible
-                             </div>
-                         </div>
-                     )}
-                 </div>
-                 
+                        {/* Floating Magic Button Hint */}
+                        {!showSmartEditDialog && selectionRange && (
+                            <div className="absolute bottom-8 right-8 animate-bounce">
+                                <div className="bg-indigo-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center text-xs font-bold cursor-pointer hover:bg-indigo-500 transition-colors" onClick={() => setShowSmartEditDialog(true)}>
+                                    <Sparkles className="w-4 h-4 mr-2" />
+                                    IA Mágica Disponible
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
                  {/* SMART EDIT DIALOG (GLASSMORPHISM) */}
-                 {showSmartEditDialog && selectionRange && (
+                {showSmartEditDialog && selectionRange && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => {setShowSmartEditDialog(false); setSelectionRange(null);}}></div>
                         
@@ -737,50 +735,50 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
                             )}
                         </div>
                     </div>
-                 )}
-             </div>
-           ) : (
+                )}
+            </div>
+            ) : (
              /* READ MODE (Paginated) */
-             <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#0a0a0a]">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#0a0a0a]">
                 <div className="max-w-4xl mx-auto bg-white shadow-[0_0_50px_rgba(0,0,0,0.5)] min-h-[1100px] p-12 md:p-16 relative">
-                     <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                         <img src="https://upload.wikimedia.org/wikipedia/commons/5/50/Escudo_Nacional_Mexicano_V2.svg" className="w-24 h-24" alt="Escudo" />
-                     </div>
-                     <div className="absolute top-8 left-12 text-[10px] text-slate-400 font-mono">PÁGINA {currentPage + 1} / {pages.length}</div>
+                    <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/5/50/Escudo_Nacional_Mexicano_V2.svg" className="w-24 h-24" alt="Escudo" />
+                    </div>
+                    <div className="absolute top-8 left-12 text-[10px] text-slate-400 font-mono">PÁGINA {currentPage + 1} / {pages.length}</div>
                     
                     <article className="prose prose-slate max-w-none font-serif text-slate-900 leading-relaxed text-justify prose-headings:text-center prose-headings:font-bold prose-headings:uppercase prose-p:my-4">
                         <ReactMarkdown 
-                          components={{
+                        components={{
                             h1: ({node, ...props}) => <h1 className="mt-8 mb-6 text-xl tracking-wide text-slate-900 border-b-2 border-slate-900 pb-2 inline-block mx-auto" {...props} />,
                             h2: ({node, ...props}) => <h2 className="mt-8 mb-4 text-lg font-bold text-slate-800" {...props} />,
-                          }}
+                        }}
                         >
                             {pages[currentPage] || ""}
                         </ReactMarkdown>
                     </article>
 
                     {currentPage === pages.length - 1 && (
-                      <div className="mt-24 flex flex-col items-center text-center space-y-12">
-                          <div className="w-64 border-t border-slate-900 pt-2"><p className="font-bold text-sm">LIC. JUEZ DE PRIMERA INSTANCIA</p></div>
-                          <DisclaimerFooter />
-                          <div className="text-xs text-slate-400">FIN DEL DOCUMENTO</div>
-                      </div>
+                        <div className="mt-24 flex flex-col items-center text-center space-y-12">
+                            <div className="w-64 border-t border-slate-900 pt-2"><p className="font-bold text-sm">LIC. JUEZ DE PRIMERA INSTANCIA</p></div>
+                            <DisclaimerFooter />
+                            <div className="text-xs text-slate-400">FIN DEL DOCUMENTO</div>
+                        </div>
                     )}
                 </div>
                 
                 {/* Pagination Controls Floating */}
                 <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex items-center space-x-4 bg-slate-900/90 backdrop-blur px-4 py-2 rounded-full border border-white/10 shadow-xl z-30">
-                     <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={currentPage === 0} className="text-white disabled:opacity-30"><ChevronLeft className="w-5 h-5"/></button>
-                     <span className="text-xs font-mono text-white">{currentPage + 1} / {pages.length}</span>
-                     <button onClick={() => setCurrentPage(p => Math.min(pages.length - 1, p + 1))} disabled={currentPage === pages.length - 1} className="text-white disabled:opacity-30"><ChevronRight className="w-5 h-5"/></button>
+                    <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={currentPage === 0} className="text-white disabled:opacity-30"><ChevronLeft className="w-5 h-5"/></button>
+                    <span className="text-xs font-mono text-white">{currentPage + 1} / {pages.length}</span>
+                    <button onClick={() => setCurrentPage(p => Math.min(pages.length - 1, p + 1))} disabled={currentPage === pages.length - 1} className="text-white disabled:opacity-30"><ChevronRight className="w-5 h-5"/></button>
                 </div>
-             </div>
-           )}
+            </div>
+            )}
         </div>
 
         {/* RATIO DECIDENDI TAB CONTENT */}
         {activeTab === 'ratio' && (
-             <div className="flex-1 bg-[#0a0a0a] p-8 overflow-y-auto">
+            <div className="flex-1 bg-[#0a0a0a] p-8 overflow-y-auto">
                 <div className="max-w-4xl mx-auto">
                     <div className="mb-8">
                         <h2 className="text-2xl font-bold text-white flex items-center mb-2">
@@ -810,12 +808,12 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
                         <DisclaimerFooter />
                     </div>
                 </div>
-             </div>
+            </div>
         )}
 
         {/* SEMANTIC MODE TAB CONTENT */}
         {activeTab === 'semantic' && (
-             <div className="flex-1 bg-[#0a0a0a] p-8 overflow-y-auto">
+            <div className="flex-1 bg-[#0a0a0a] p-8 overflow-y-auto">
                 <div className="max-w-4xl mx-auto">
                     <div className="mb-8">
                         <h2 className="text-2xl font-bold text-white flex items-center mb-2">
@@ -865,31 +863,31 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
                         </div>
                     ) : (
                         <div className="text-center py-20 bg-[#151517] rounded-xl border border-white/10 border-dashed">
-                             <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                             <p className="text-slate-400">No se encontraron citas legislativas o el análisis no se pudo completar.</p>
-                             <button onClick={() => handleTabChange('semantic')} className="mt-4 text-purple-400 hover:text-purple-300 text-sm font-bold">Reintentar Análisis</button>
+                            <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                            <p className="text-slate-400">No se encontraron citas legislativas o el análisis no se pudo completar.</p>
+                            <button onClick={() => handleTabChange('semantic')} className="mt-4 text-purple-400 hover:text-purple-300 text-sm font-bold">Reintentar Análisis</button>
                         </div>
                     )}
                 </div>
-             </div>
+            </div>
         )}
 
         {/* ANALYTICS PANEL (Overlay or Tab) */}
         {activeTab === 'analytics' && (
-           <div className="flex-1 bg-[#0a0a0a] flex flex-col p-4 md:p-6 overflow-hidden animate-fade-in">
-              <div className="flex-1 bg-[#0f0f11] rounded-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl">
-                 <div className="p-4 border-b border-white/10 bg-[#151517] flex justify-between items-center">
-                    <h3 className="font-bold text-white flex items-center"><MessageSquare className="w-4 h-4 mr-2 text-blue-500"/> JUXA Assistant</h3>
-                    <button 
-                      onClick={() => handleSendMessage('analysis')} 
-                      className="text-xs bg-red-900/20 text-red-400 px-3 py-1.5 rounded-lg border border-red-900/50 flex items-center hover:bg-red-900/40 transition-colors"
-                      disabled={isChatLoading}
-                    >
-                      <AlertTriangle className="w-3 h-3 mr-1" /> Buscar Contradicciones
-                    </button>
-                 </div>
-                 
-                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 bg-[#0a0a0a] flex flex-col p-4 md:p-6 overflow-hidden animate-fade-in">
+                <div className="flex-1 bg-[#0f0f11] rounded-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl">
+                    <div className="p-4 border-b border-white/10 bg-[#151517] flex justify-between items-center">
+                        <h3 className="font-bold text-white flex items-center"><MessageSquare className="w-4 h-4 mr-2 text-blue-500"/> JUXA Assistant</h3>
+                        <button 
+                        onClick={() => handleSendMessage('analysis')} 
+                        className="text-xs bg-red-900/20 text-red-400 px-3 py-1.5 rounded-lg border border-red-900/50 flex items-center hover:bg-red-900/40 transition-colors"
+                        disabled={isChatLoading}
+                        >
+                        <AlertTriangle className="w-3 h-3 mr-1" /> Buscar Contradicciones
+                        </button>
+                    </div>
+                    
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {chatMessages.length === 0 && (
                         <div className="text-center text-slate-500 mt-20">
                             <p className="text-sm">Dialoga con la sentencia o solicita un análisis de riesgos.</p>
@@ -908,38 +906,38 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
                     ))}
                     {isChatLoading && (
                         <div className="flex justify-start">
-                             <div className="bg-[#1a1a1d] p-4 rounded-2xl rounded-tl-none border border-white/10">
-                                 <div className="flex space-x-1">
-                                     <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce"></div>
-                                     <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce delay-75"></div>
-                                     <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce delay-150"></div>
-                                 </div>
-                             </div>
+                            <div className="bg-[#1a1a1d] p-4 rounded-2xl rounded-tl-none border border-white/10">
+                                <div className="flex space-x-1">
+                                    <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce"></div>
+                                    <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce delay-75"></div>
+                                    <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce delay-150"></div>
+                                </div>
+                            </div>
                         </div>
                     )}
-                 </div>
+                </div>
 
-                 <div className="p-4 bg-[#151517] border-t border-white/10">
+                <div className="p-4 bg-[#151517] border-t border-white/10">
                     <div className="flex items-center space-x-2">
                         <input 
-                          type="text" 
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage('chat')}
-                          placeholder="Escribe una instrucción para modificar el proyecto..."
-                          className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 outline-none"
+                            type="text" 
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage('chat')}
+                            placeholder="Escribe una instrucción para modificar el proyecto..."
+                            className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 outline-none"
                         />
                         <button 
-                           onClick={() => handleSendMessage('chat')}
-                           disabled={isChatLoading || !chatInput}
-                           className="bg-blue-600 p-3 rounded-xl text-white hover:bg-blue-500 disabled:opacity-50"
+                            onClick={() => handleSendMessage('chat')}
+                            disabled={isChatLoading || !chatInput}
+                            className="bg-blue-600 p-3 rounded-xl text-white hover:bg-blue-500 disabled:opacity-50"
                         >
-                           <Send className="w-4 h-4" />
+                            <Send className="w-4 h-4" />
                         </button>
                     </div>
-                 </div>
-              </div>
-           </div>
+                </div>
+            </div>
+        </div>
         )}
 
         {/* RIGHT SPLIT PANEL: PDF VIEWER (If Enabled) */}
@@ -959,7 +957,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({ data, isLoadin
             </div>
         )}
 
-      </div>
-    </div>
-  );
+            </div>
+        </div>
+    );
 };
